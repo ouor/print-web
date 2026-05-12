@@ -40,18 +40,26 @@ def _claim_next_job() -> Job | None:
         return job
 
 
-def _settle(job_id: str, ok: bool, message: str | None) -> None:
+def _mark_done(job_id: str) -> None:
     with Session(engine) as session:
         job = session.get(Job, job_id)
         if job is None:
             return
-        if ok:
-            job.status = JobStatus.DONE
-            job.status_message = None
-            job.printed_at = utcnow()
-        else:
-            job.status = JobStatus.FAILED
-            job.status_message = message
+        job.status = JobStatus.DONE
+        job.status_message = None
+        job.printed_at = utcnow()
+        touch(job)
+        session.add(job)
+        session.commit()
+
+
+def _mark_failed(job_id: str, message: str) -> None:
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if job is None:
+            return
+        job.status = JobStatus.FAILED
+        job.status_message = message
         touch(job)
         session.add(job)
         session.commit()
@@ -80,14 +88,14 @@ async def _run_once(loop: asyncio.AbstractEventLoop) -> bool:
         await loop.run_in_executor(
             None, print_image, job.image_path, settings.printer_name or None
         )
-        await loop.run_in_executor(None, _settle, job.id, True, None)
+        await loop.run_in_executor(None, _mark_done, job.id)
         log.info("printed job %s", job.id)
     except PrinterError as e:
         log.exception("print failed for %s", job.id)
-        await loop.run_in_executor(None, _settle, job.id, False, str(e))
+        await loop.run_in_executor(None, _mark_failed, job.id, str(e))
     except Exception as e:  # pragma: no cover - safety net
         log.exception("unexpected print error for %s", job.id)
-        await loop.run_in_executor(None, _settle, job.id, False, f"unexpected: {e}")
+        await loop.run_in_executor(None, _mark_failed, job.id, f"unexpected: {e}")
     return True
 
 
