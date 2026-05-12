@@ -62,34 +62,39 @@ def list_jobs_for_admin(
     return list(session.exec(stmt))
 
 
-def approve_job(session: Session, job_id: str) -> Job:
+def _decide_pending(
+    session: Session,
+    job_id: str,
+    *,
+    new_status: JobStatus,
+    reject_reason: str | None = None,
+) -> Job:
+    """Move a PENDING job to APPROVED or REJECTED. Raises if no such job
+    or if the job has already left PENDING."""
     job = session.get(Job, job_id)
     if job is None:
         raise LookupError(job_id)
     if job.status != JobStatus.PENDING:
-        raise InvalidTransitionError(f"cannot approve job in status {job.status}")
+        raise InvalidTransitionError(
+            f"cannot transition job in status {job.status} to {new_status}"
+        )
     now = utcnow()
-    job.status = JobStatus.APPROVED
+    job.status = new_status
     job.decided_at = now
     job.updated_at = now
+    if reject_reason is not None:
+        job.reject_reason = reject_reason.strip() or None
     session.add(job)
     session.commit()
     session.refresh(job)
     return job
+
+
+def approve_job(session: Session, job_id: str) -> Job:
+    return _decide_pending(session, job_id, new_status=JobStatus.APPROVED)
 
 
 def reject_job(session: Session, job_id: str, reason: str) -> Job:
-    job = session.get(Job, job_id)
-    if job is None:
-        raise LookupError(job_id)
-    if job.status != JobStatus.PENDING:
-        raise InvalidTransitionError(f"cannot reject job in status {job.status}")
-    now = utcnow()
-    job.status = JobStatus.REJECTED
-    job.reject_reason = reason.strip() or None
-    job.decided_at = now
-    job.updated_at = now
-    session.add(job)
-    session.commit()
-    session.refresh(job)
-    return job
+    return _decide_pending(
+        session, job_id, new_status=JobStatus.REJECTED, reject_reason=reason
+    )
