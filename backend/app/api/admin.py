@@ -1,11 +1,45 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from datetime import datetime
+from pathlib import Path
 
-from app.api.schemas import AdminLoginRequest, AdminMe
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse
+from sqlmodel import Session
+
+from app.api.schemas import (
+    AdminJob,
+    AdminJobList,
+    AdminLoginRequest,
+    AdminMe,
+    RejectRequest,
+)
 from app.core.config import settings
 from app.core.deps import is_admin, require_admin
 from app.core.security import issue_session, verify_admin_password
+from app.db.engine import get_session
+from app.db.models import Job
+from app.services.jobs import (
+    InvalidTransitionError,
+    approve_job,
+    list_jobs_for_admin,
+    reject_job,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _to_admin_job(job: Job) -> AdminJob:
+    return AdminJob(
+        id=job.id,
+        requester_name=job.requester_name,
+        status=job.status,
+        status_message=job.status_message,
+        reject_reason=job.reject_reason,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        decided_at=job.decided_at,
+        printed_at=job.printed_at,
+        has_image=bool(job.image_path and Path(job.image_path).exists()),
+    )
 
 
 @router.post("/login", response_model=AdminMe)
@@ -36,6 +70,70 @@ def me(request: Request) -> AdminMe:
     return AdminMe(authenticated=is_admin(request))
 
 
-@router.get("/_probe", dependencies=[Depends(require_admin)])
-def probe() -> dict[str, str]:
-    return {"ok": "true"}
+@router.get("/jobs", response_model=AdminJobList, dependencies=[Depends(require_admin)])
+def list_jobs(
+    since: datetime | None = None,
+    session: Session = Depends(get_session),
+) -> AdminJobList:
+    jobs = list_jobs_for_admin(session, since=since)
+    cursor = max((j.updated_at for j in jobs), default=since)
+    return AdminJobList(items=[_to_admin_job(j) for j in jobs], cursor=cursor)
+
+
+@router.post(
+    "/jobs/{job_id}/approve",
+    response_model=AdminJob,
+    dependencies=[Depends(require_admin)],
+)
+def approve(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> AdminJob:
+    try:
+        job = approve_job(session, job_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail="job not found") from e
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _to_admin_job(job)
+
+
+@router.post(
+    "/jobs/{job_id}/reject",
+    response_model=AdminJob,
+    dependencies=[Depends(require_admin)],
+)
+def reject(
+    job_id: str,
+    payload: RejectRequest,
+    session: Session = Depends(get_session),
+) -> AdminJob:
+    try:
+        job = reject_job(session, job_id, payload.reason)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail="job not found") from e
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _to_admin_job(job)
+
+
+@router.get("/jobs/{job_id}/thumb", dependencies=[Depends(require_admin)])
+def job_thumb(job_id: str, session: Session = Depends(get_session)) -> FileResponse:
+    job = session.get(Job, job_id)
+    if job is None or not job.thumb_path:
+        raise HTTPException(status_code=404, detail="thumb not found")
+    path = Path(job.thumb_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="thumb file missing")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/jobs/{job_id}/image", dependencies=[Depends(require_admin)])
+def job_image(job_id: str, session: Session = Depends(get_session)) -> FileResponse:
+    job = session.get(Job, job_id)
+    if job is None or not job.image_path:
+        raise HTTPException(status_code=404, detail="image not found")
+    path = Path(job.image_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="image file missing")
+    return FileResponse(path, media_type="image/jpeg")

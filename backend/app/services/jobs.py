@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlmodel import Session, select
 
@@ -8,6 +9,10 @@ from app.services.image import save_image
 
 class DuplicateRequestError(Exception):
     """Raised when the same idempotency key is submitted twice with different content."""
+
+
+class InvalidTransitionError(Exception):
+    pass
 
 
 def create_job(
@@ -46,3 +51,49 @@ def get_job(session: Session, job_id: str) -> Job | None:
 
 def touch(job: Job) -> None:
     job.updated_at = utcnow()
+
+
+def list_jobs_for_admin(
+    session: Session,
+    *,
+    since: datetime | None,
+    limit: int = 200,
+) -> list[Job]:
+    stmt = select(Job)
+    if since is not None:
+        stmt = stmt.where(Job.updated_at > since)
+    stmt = stmt.order_by(Job.updated_at.desc()).limit(limit)  # type: ignore[union-attr]
+    return list(session.exec(stmt))
+
+
+def approve_job(session: Session, job_id: str) -> Job:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise LookupError(job_id)
+    if job.status != JobStatus.PENDING:
+        raise InvalidTransitionError(f"cannot approve job in status {job.status}")
+    now = utcnow()
+    job.status = JobStatus.APPROVED
+    job.decided_at = now
+    job.updated_at = now
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def reject_job(session: Session, job_id: str, reason: str) -> Job:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise LookupError(job_id)
+    if job.status != JobStatus.PENDING:
+        raise InvalidTransitionError(f"cannot reject job in status {job.status}")
+    now = utcnow()
+    job.status = JobStatus.REJECTED
+    job.reject_reason = reason.strip() or None
+    job.decided_at = now
+    job.updated_at = now
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job

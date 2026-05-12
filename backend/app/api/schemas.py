@@ -50,3 +50,8 @@ class AdminLoginRequest(BaseModel):
 
 class AdminMe(BaseModel):
     authenticated: bool
+
+
+class AdminJobList(BaseModel):
+    items: list[AdminJob]
+    cursor: datetime | None
