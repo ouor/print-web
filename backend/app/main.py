@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.db.engine import init_db
 from app.printer.worker import worker_loop
 from app.services.retention import retention_loop
+from app.spa import mount_spa
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,6 +44,9 @@ def create_app() -> FastAPI:
 
     app.include_router(jobs_api.router)
     app.include_router(admin_api.router)
+
+    # Mount last so all explicit API routes take precedence.
+    mount_spa(app)
 
     return app
 
