@@ -116,11 +116,25 @@ function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Thresholds for the low-resolution warning. We expect images to print at
+// 4x6 inches; 250 ppi (= 1500x1000 px on the rotated landscape image) is
+// the line below which prints start looking soft to the average eye.
+const LOW_RES_LONG_EDGE = 1500
+const LOW_RES_SHORT_EDGE = 1000
+
+type NormalizedImage = {
+  file: File
+  /** Width and height of the rotated landscape pixels; both 0 if the
+   *  browser couldn't decode (e.g. HEIC outside Safari). */
+  width: number
+  height: number
+}
+
 // Normalize an upload so the backend always receives the image laid out
 // in landscape (paper's long axis). EXIF orientation is baked into the
 // pixels, and portrait sources are rotated 90° CW. Square images are
 // passed through untouched — the print layer centers them with letterbox.
-async function normalizeForPrint(file: File): Promise<File> {
+async function normalizeForPrint(file: File): Promise<NormalizedImage> {
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -128,7 +142,7 @@ async function normalizeForPrint(file: File): Promise<File> {
     // Browser can't decode (e.g. HEIC on a non-Safari browser). Hand the
     // original bytes to the backend; Pillow + pillow-heif will normalize
     // it server-side and the orientation guard will catch portrait inputs.
-    return file
+    return { file, width: 0, height: 0 }
   }
 
   const isPortrait = bitmap.height > bitmap.width
@@ -141,7 +155,7 @@ async function normalizeForPrint(file: File): Promise<File> {
   const ctx = canvas.getContext('2d')
   if (!ctx) {
     bitmap.close()
-    return file
+    return { file, width: outW, height: outH }
   }
 
   if (isPortrait) {
@@ -156,13 +170,17 @@ async function normalizeForPrint(file: File): Promise<File> {
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/jpeg', 0.92),
   )
-  if (!blob) return file
+  if (!blob) return { file, width: outW, height: outH }
 
   const baseName = file.name.replace(/\.[^.]+$/i, '') || 'photo'
-  return new File([blob], `${baseName}.jpg`, {
-    type: 'image/jpeg',
-    lastModified: Date.now(),
-  })
+  return {
+    file: new File([blob], `${baseName}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    }),
+    width: outW,
+    height: outH,
+  }
 }
 
 function ImagePicker({
@@ -176,6 +194,7 @@ function ImagePicker({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [processing, setProcessing] = useState(false)
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
 
   const previewUrl = useMemo(() => {
     if (!file) return null
@@ -194,19 +213,28 @@ function ImagePicker({
 
   async function handleSelection(raw: File | null) {
     if (!raw) {
+      setDims(null)
       onChange(null)
       return
     }
     setProcessing(true)
     try {
       const prepared = await normalizeForPrint(raw)
-      onChange(prepared)
+      setDims(
+        prepared.width && prepared.height
+          ? { w: prepared.width, h: prepared.height }
+          : null,
+      )
+      onChange(prepared.file)
     } finally {
       setProcessing(false)
     }
   }
 
   const locked = disabled || processing
+  const isLowRes =
+    dims !== null &&
+    (dims.w < LOW_RES_LONG_EDGE || dims.h < LOW_RES_SHORT_EDGE)
 
   return (
     <div className="mt-1">
@@ -275,6 +303,29 @@ function ImagePicker({
         <p className="mt-2 text-center text-xs text-gray-500">
           다시 탭하면 사진을 바꿀 수 있습니다.
         </p>
+      )}
+      {isLowRes && dims && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mt-0.5 h-4 w-4 flex-shrink-0"
+            aria-hidden="true"
+          >
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          </svg>
+          <div>
+            <p className="font-medium">사진 해상도가 낮아요 ({dims.w}×{dims.h})</p>
+            <p className="text-xs">인쇄 시 흐리게 보일 수 있어요. 그대로 진행하셔도 됩니다.</p>
+          </div>
+        </div>
       )}
     </div>
   )
