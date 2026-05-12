@@ -116,6 +116,55 @@ function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Normalize an upload so the backend always receives the image laid out
+// in landscape (paper's long axis). EXIF orientation is baked into the
+// pixels, and portrait sources are rotated 90° CW. Square images are
+// passed through untouched — the print layer centers them with letterbox.
+async function normalizeForPrint(file: File): Promise<File> {
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch {
+    // Browser can't decode (e.g. HEIC on a non-Safari browser). Hand the
+    // original bytes to the backend; Pillow + pillow-heif will normalize
+    // it server-side and the orientation guard will catch portrait inputs.
+    return file
+  }
+
+  const isPortrait = bitmap.height > bitmap.width
+  const outW = isPortrait ? bitmap.height : bitmap.width
+  const outH = isPortrait ? bitmap.width : bitmap.height
+
+  const canvas = document.createElement('canvas')
+  canvas.width = outW
+  canvas.height = outH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close()
+    return file
+  }
+
+  if (isPortrait) {
+    ctx.translate(outW, 0)
+    ctx.rotate(Math.PI / 2)
+    ctx.drawImage(bitmap, 0, 0)
+  } else {
+    ctx.drawImage(bitmap, 0, 0)
+  }
+  bitmap.close()
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', 0.92),
+  )
+  if (!blob) return file
+
+  const baseName = file.name.replace(/\.[^.]+$/i, '') || 'photo'
+  return new File([blob], `${baseName}.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  })
+}
+
 function ImagePicker({
   file,
   disabled,
@@ -126,6 +175,7 @@ function ImagePicker({
   onChange: (f: File | null) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [processing, setProcessing] = useState(false)
 
   const previewUrl = useMemo(() => {
     if (!file) return null
@@ -138,9 +188,25 @@ function ImagePicker({
   }, [previewUrl])
 
   function openPicker() {
-    if (disabled) return
+    if (disabled || processing) return
     inputRef.current?.click()
   }
+
+  async function handleSelection(raw: File | null) {
+    if (!raw) {
+      onChange(null)
+      return
+    }
+    setProcessing(true)
+    try {
+      const prepared = await normalizeForPrint(raw)
+      onChange(prepared)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const locked = disabled || processing
 
   return (
     <div className="mt-1">
@@ -148,18 +214,23 @@ function ImagePicker({
         ref={inputRef}
         type="file"
         accept="image/*"
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        disabled={locked}
+        onChange={(e) => {
+          const raw = e.target.files?.[0] ?? null
+          // Reset value so picking the same file again still re-runs.
+          e.target.value = ''
+          void handleSelection(raw)
+        }}
         className="sr-only"
         aria-label="사진 선택"
       />
       <button
         type="button"
         onClick={openPicker}
-        disabled={disabled}
+        disabled={locked}
         aria-label={previewUrl ? '사진 변경' : '사진 선택'}
         className={
-          'block w-full overflow-hidden rounded-xl text-left transition disabled:opacity-60 ' +
+          'relative block w-full overflow-hidden rounded-xl text-left transition disabled:opacity-60 ' +
           (previewUrl
             ? 'border border-gray-300 bg-gray-100 hover:border-gray-400'
             : 'border-2 border-dashed border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100')
@@ -194,8 +265,13 @@ function ImagePicker({
             <p className="mt-1 text-xs text-gray-500">탭하여 갤러리에서 선택</p>
           </div>
         )}
+        {processing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium text-gray-700">
+            사진 준비 중…
+          </div>
+        )}
       </button>
-      {previewUrl && (
+      {previewUrl && !processing && (
         <p className="mt-2 text-center text-xs text-gray-500">
           다시 탭하면 사진을 바꿀 수 있습니다.
         </p>

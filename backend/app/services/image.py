@@ -41,6 +41,14 @@ def save_image(raw: bytes, job_id: str) -> tuple[Path, Path]:
     # JPEG output requires RGB. convert() is a no-op when already in RGB.
     normalized = rotated if rotated.mode == "RGB" else rotated.convert("RGB")
 
+    # The SELPHY's P paper is landscape (148x100mm = 3:2). The client is
+    # supposed to rotate portrait sources before uploading; if a portrait
+    # image still arrives here something has bypassed the client path.
+    if normalized.size[1] > normalized.size[0]:
+        raise InvalidImageError(
+            "image must be landscape or square; rotate before uploading"
+        )
+
     upload_dir = _ensure_upload_dir()
     image_path = upload_dir / f"{job_id}.jpg"
     thumb_path = upload_dir / f"{job_id}_thumb.jpg"
