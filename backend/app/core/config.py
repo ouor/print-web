@@ -18,6 +18,12 @@ class Settings(BaseSettings):
 
     printer_name: str = ""
 
+    # Photo paper layout in mm — used by the startup calibration to push an
+    # oversized DEVMODE whose printable area equals the real paper, so
+    # prints fill the sheet edge-to-edge. Defaults to 4x6 (152.4 x 101.6 mm).
+    print_paper_long_mm: float = 152.4
+    print_paper_short_mm: float = 101.6
+
     retention_days: int = 7
     upload_max_mb: int = 15
 

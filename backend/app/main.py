@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from app.api import admin as admin_api
 from app.api import jobs as jobs_api
 from app.core.config import settings
 from app.db.engine import init_db
+from app.printer.driver import resolve_printer_name, set_active_geometry
 from app.printer.worker import worker_loop
 from app.services.retention import retention_loop
 from app.spa import mount_spa
@@ -17,10 +19,50 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
+log = logging.getLogger("app.main")
+
+
+def _calibrate_printer():
+    """Probe the printer and push an oversized DEVMODE for edge-to-edge
+    prints. Returns (printer_name, devmode_snapshot) for the shutdown
+    restore, or None on any failure (we still want the server to boot)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        from app.printer.calibration import configure_borderless
+
+        target = resolve_printer_name(settings.printer_name or None)
+        geometry, snapshot = configure_borderless(
+            target,
+            target_long_mm=settings.print_paper_long_mm,
+            target_short_mm=settings.print_paper_short_mm,
+        )
+        set_active_geometry(target, geometry)
+        return target, snapshot
+    except Exception:
+        log.exception("printer calibration failed; falling back to per-job probe")
+        return None
+
+
+def _restore_printer(state) -> None:
+    if state is None:
+        return
+    printer_name, snapshot = state
+    try:
+        from app.printer.calibration import restore_devmode
+
+        restore_devmode(printer_name, snapshot)
+        set_active_geometry(printer_name, None)
+        log.info("restored DEVMODE for %s", printer_name)
+    except Exception:
+        log.exception("failed to restore DEVMODE for %s", printer_name)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    calibration_state = _calibrate_printer()
+
     stop_event = asyncio.Event()
     worker_task = asyncio.create_task(worker_loop(stop_event), name="print-worker")
     retention_task = asyncio.create_task(retention_loop(stop_event), name="retention")
@@ -33,6 +75,7 @@ async def lifespan(app: FastAPI):
                 await asyncio.wait_for(task, timeout=10)
             except asyncio.TimeoutError:
                 task.cancel()
+        _restore_printer(calibration_state)
 
 
 def create_app() -> FastAPI:
