@@ -117,23 +117,24 @@ def reject(
     return _to_admin_job(job)
 
 
+def _serve_stored_file(session: Session, job_id: str, attr: str) -> FileResponse:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    stored = getattr(job, attr)
+    if not stored:
+        raise HTTPException(status_code=404, detail="file not stored")
+    path = Path(stored)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="file missing")
+    return FileResponse(path, media_type="image/jpeg")
+
+
 @router.get("/jobs/{job_id}/thumb", dependencies=[Depends(require_admin)])
 def job_thumb(job_id: str, session: Session = Depends(get_session)) -> FileResponse:
-    job = session.get(Job, job_id)
-    if job is None or not job.thumb_path:
-        raise HTTPException(status_code=404, detail="thumb not found")
-    path = Path(job.thumb_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="thumb file missing")
-    return FileResponse(path, media_type="image/jpeg")
+    return _serve_stored_file(session, job_id, "thumb_path")
 
 
 @router.get("/jobs/{job_id}/image", dependencies=[Depends(require_admin)])
 def job_image(job_id: str, session: Session = Depends(get_session)) -> FileResponse:
-    job = session.get(Job, job_id)
-    if job is None or not job.image_path:
-        raise HTTPException(status_code=404, detail="image not found")
-    path = Path(job.image_path)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="image file missing")
-    return FileResponse(path, media_type="image/jpeg")
+    return _serve_stored_file(session, job_id, "image_path")
