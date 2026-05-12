@@ -35,20 +35,19 @@ def save_image(raw: bytes, job_id: str) -> tuple[Path, Path]:
             if im.format not in ALLOWED_FORMATS:
                 raise InvalidImageError(f"unsupported image format: {im.format}")
             rotated = ImageOps.exif_transpose(im)
-            if rotated.mode not in ("RGB", "RGBA"):
-                rotated = rotated.convert("RGB")
     except UnidentifiedImageError as e:
         raise InvalidImageError("file is not a recognizable image") from e
+
+    # JPEG output requires RGB. convert() is a no-op when already in RGB.
+    normalized = rotated if rotated.mode == "RGB" else rotated.convert("RGB")
 
     upload_dir = _ensure_upload_dir()
     image_path = upload_dir / f"{job_id}.jpg"
     thumb_path = upload_dir / f"{job_id}_thumb.jpg"
 
-    # Normalize to JPEG for consistency and smaller disk footprint.
-    save_target = rotated.convert("RGB") if rotated.mode == "RGBA" else rotated
-    save_target.save(image_path, format="JPEG", quality=92, optimize=True)
+    normalized.save(image_path, format="JPEG", quality=92, optimize=True)
 
-    thumb = save_target.copy()
+    thumb = normalized.copy()
     thumb.thumbnail((THUMB_MAX_EDGE, THUMB_MAX_EDGE))
     thumb.save(thumb_path, format="JPEG", quality=85, optimize=True)
 
