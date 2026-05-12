@@ -92,10 +92,3 @@ def print_image(image_path: str | Path, printer_name: str | None = None) -> None
             hdc.DeleteDC()
         except Exception:
             pass
-
-
-def list_printers() -> list[str]:
-    if sys.platform != "win32":
-        return []
-    flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
-    return [p[2] for p in win32print.EnumPrinters(flags)]

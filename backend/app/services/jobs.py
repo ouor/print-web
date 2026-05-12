@@ -7,10 +7,6 @@ from app.db.models import Job, JobStatus, utcnow
 from app.services.image import save_image
 
 
-class DuplicateRequestError(Exception):
-    """Raised when the same idempotency key is submitted twice with different content."""
-
-
 class InvalidTransitionError(Exception):
     pass
 
