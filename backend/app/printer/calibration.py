@@ -85,10 +85,22 @@ def _probe(printer_name: str) -> PrintGeometry:
         hdc.DeleteDC()
 
 
+def _level9_info_with_devmode(h):
+    """Read PRINTER_INFO_9. If pDevMode is None (no per-user override yet)
+    seed it with the global default (level 2) so callers can mutate."""
+    info = win32print.GetPrinter(h, 9)
+    if info["pDevMode"] is None:
+        info2 = win32print.GetPrinter(h, 2)
+        info["pDevMode"] = info2["pDevMode"]
+    if info["pDevMode"] is None:
+        raise CalibrationError("no DEVMODE available")
+    return info
+
+
 def _snapshot(printer_name: str) -> DevModeSnapshot:
     h = win32print.OpenPrinter(printer_name)
     try:
-        info = win32print.GetPrinter(h, 9)
+        info = _level9_info_with_devmode(h)
         dm = info["pDevMode"]
         return DevModeSnapshot(
             paper_size=dm.PaperSize,
@@ -114,7 +126,7 @@ def _push_custom_paper(
     — no admin needed)."""
     h = win32print.OpenPrinter(printer_name)
     try:
-        info = win32print.GetPrinter(h, 9)
+        info = _level9_info_with_devmode(h)
         dm = info["pDevMode"]
         dm.PaperSize = 0  # 0 = use width/length
         dm.PaperWidth = width_01mm
@@ -133,7 +145,7 @@ def _push_custom_paper(
 def restore_devmode(printer_name: str, snap: DevModeSnapshot) -> None:
     h = win32print.OpenPrinter(printer_name)
     try:
-        info = win32print.GetPrinter(h, 9)
+        info = _level9_info_with_devmode(h)
         dm = info["pDevMode"]
         dm.PaperSize = snap.paper_size
         dm.PaperWidth = snap.paper_width
