@@ -38,7 +38,10 @@ def _to_admin_job(job: Job) -> AdminJob:
         updated_at=job.updated_at,
         decided_at=job.decided_at,
         printed_at=job.printed_at,
-        has_image=bool(job.image_path and Path(job.image_path).exists()),
+        # Trust the column: retention sweep nulls image_path when it
+        # deletes the file, so a non-null value is authoritative without
+        # an extra stat per row.
+        has_image=bool(job.image_path),
     )
 
 
