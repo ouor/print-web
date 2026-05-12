@@ -10,6 +10,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pydantic-settings>=2.5",
     "pillow>=10.4",
+    "pillow-heif>=0.18",
     "bcrypt>=4.2",
     "itsdangerous>=2.2",
     "pywin32>=306; sys_platform == 'win32'",

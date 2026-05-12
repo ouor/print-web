@@ -2,8 +2,13 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
 from app.core.config import settings
+
+# Register the HEIF opener once at import time so Image.open() can decode
+# iPhone uploads (which default to .heic).
+register_heif_opener()
 
 ALLOWED_FORMATS: frozenset[str] = frozenset({"JPEG", "PNG", "WEBP", "HEIF", "HEIC"})
 THUMB_MAX_EDGE = 400
