@@ -9,6 +9,7 @@ from app.api import jobs as jobs_api
 from app.core.config import settings
 from app.db.engine import init_db
 from app.printer.worker import worker_loop
+from app.services.retention import retention_loop
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,14 +22,16 @@ async def lifespan(app: FastAPI):
     init_db()
     stop_event = asyncio.Event()
     worker_task = asyncio.create_task(worker_loop(stop_event), name="print-worker")
+    retention_task = asyncio.create_task(retention_loop(stop_event), name="retention")
     try:
         yield
     finally:
         stop_event.set()
-        try:
-            await asyncio.wait_for(worker_task, timeout=10)
-        except asyncio.TimeoutError:
-            worker_task.cancel()
+        for task in (worker_task, retention_task):
+            try:
+                await asyncio.wait_for(task, timeout=10)
+            except asyncio.TimeoutError:
+                task.cancel()
 
 
 def create_app() -> FastAPI:

@@ -19,7 +19,9 @@ TERMINAL_STATUSES: frozenset[JobStatus] = frozenset(
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # SQLite drops tzinfo on round-trip, so store naive UTC throughout to
+    # avoid mixing aware/naive datetimes when comparing.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Job(SQLModel, table=True):
