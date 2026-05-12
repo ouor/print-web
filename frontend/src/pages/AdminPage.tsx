@@ -308,14 +308,11 @@ function RejectModal({
     mutation: { onSuccess: () => onDone() },
   })
 
-  const reason = (selected ?? '') === 'custom' || selected === null
-    ? custom.trim()
-    : (selected ?? '')
+  const reason = selected === 'custom' ? custom.trim() : (selected ?? '')
 
   function submit() {
-    const final = reason || (selected ?? '')
-    if (!final) return
-    reject.mutate({ jobId: job.id, data: { reason: final } })
+    if (!reason || reject.isPending) return
+    reject.mutate({ jobId: job.id, data: { reason } })
   }
 
   return (
