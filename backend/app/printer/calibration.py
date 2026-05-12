@@ -28,11 +28,21 @@ _DM_ORIENTATION = 0x0001
 _DM_PAPERSIZE = 0x0002
 _DM_PAPERLENGTH = 0x0004
 _DM_PAPERWIDTH = 0x0008
+_DM_PRINTQUALITY = 0x0400
 _DM_COLOR = 0x0800
+_DM_MEDIATYPE = 0x1000
 
 _DMORIENT_PORTRAIT = 1
 _DMORIENT_LANDSCAPE = 2
 _DMCOLOR_COLOR = 2
+_DMRES_HIGH = -4  # driver's highest quality mode
+
+# Photo print defaults pushed at calibration time. 263 is the Brother
+# driver's "기타 사진 용지" (generic glossy photo paper); on a different
+# printer, run win32print.DeviceCapabilities(name, "", 34/35) to find the
+# right code for the loaded media.
+_PHOTO_PRINT_QUALITY = _DMRES_HIGH
+_PHOTO_MEDIA_TYPE = 263
 
 # GDI DeviceCaps indices
 _HORZRES, _VERTRES = 8, 10
@@ -61,6 +71,8 @@ class DevModeSnapshot:
     paper_length: int   # 0.1 mm
     orientation: int
     color: int
+    print_quality: int
+    media_type: int
     fields: int
 
 
@@ -108,6 +120,8 @@ def _snapshot(printer_name: str) -> DevModeSnapshot:
             paper_length=dm.PaperLength,
             orientation=dm.Orientation,
             color=dm.Color,
+            print_quality=dm.PrintQuality,
+            media_type=dm.MediaType,
             fields=dm.Fields,
         )
     finally:
@@ -121,6 +135,8 @@ def _push_custom_paper(
     length_01mm: int,
     landscape: bool = True,
     color: bool = True,
+    print_quality: int = _PHOTO_PRINT_QUALITY,
+    media_type: int = _PHOTO_MEDIA_TYPE,
 ) -> None:
     """Apply a custom paper size to the printer's per-user DEVMODE (level 9
     — no admin needed)."""
@@ -133,8 +149,11 @@ def _push_custom_paper(
         dm.PaperLength = length_01mm
         dm.Orientation = _DMORIENT_LANDSCAPE if landscape else _DMORIENT_PORTRAIT
         dm.Color = _DMCOLOR_COLOR if color else 1
+        dm.PrintQuality = print_quality
+        dm.MediaType = media_type
         dm.Fields |= (
-            _DM_ORIENTATION | _DM_PAPERSIZE | _DM_PAPERLENGTH | _DM_PAPERWIDTH | _DM_COLOR
+            _DM_ORIENTATION | _DM_PAPERSIZE | _DM_PAPERLENGTH | _DM_PAPERWIDTH
+            | _DM_COLOR | _DM_PRINTQUALITY | _DM_MEDIATYPE
         )
         info["pDevMode"] = dm
         win32print.SetPrinter(h, 9, info, 0)
@@ -152,6 +171,8 @@ def restore_devmode(printer_name: str, snap: DevModeSnapshot) -> None:
         dm.PaperLength = snap.paper_length
         dm.Orientation = snap.orientation
         dm.Color = snap.color
+        dm.PrintQuality = snap.print_quality
+        dm.MediaType = snap.media_type
         dm.Fields = snap.fields
         info["pDevMode"] = dm
         win32print.SetPrinter(h, 9, info, 0)
