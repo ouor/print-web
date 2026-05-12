@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data.db"
     upload_dir: Path = Path("./uploads")
 
+    session_cookie_name: str = "print_web_session"
+    session_max_age_seconds: int = 24 * 3600
+    session_secure: bool = False
+
     @property
     def upload_max_bytes(self) -> int:
         return self.upload_max_mb * 1024 * 1024

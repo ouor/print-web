@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api import admin as admin_api
 from app.api import jobs as jobs_api
 from app.core.config import settings
 from app.db.engine import init_db
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(jobs_api.router)
+    app.include_router(admin_api.router)
 
     return app
 
