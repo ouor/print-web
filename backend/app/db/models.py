@@ -35,6 +35,9 @@ class Job(SQLModel, table=True):
     status: JobStatus = Field(default=JobStatus.PENDING, index=True)
     status_message: str | None = None
     reject_reason: str | None = None
+    # Number of admin-initiated retries. 0 on first attempt; bumped each
+    # time a FAILED job is sent back to APPROVED via the retry endpoint.
+    retry_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=utcnow, index=True)
     updated_at: datetime = Field(default_factory=utcnow, index=True)
     decided_at: datetime | None = None
