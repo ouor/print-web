@@ -4,6 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import admin as admin_api
 from app.api import jobs as jobs_api
@@ -143,6 +144,18 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="print-web", version="0.1.0", lifespan=lifespan)
+
+    # External kiosk front-end hits this API cross-origin. Explicit list
+    # (no '*') because the admin endpoints rely on session cookies, which
+    # browsers refuse to send unless allow_credentials=True is paired with
+    # a concrete origin.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://phosom-kiosk.pages.dev"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
