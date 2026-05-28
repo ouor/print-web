@@ -9,12 +9,28 @@ contains an index.html wins:
 from __future__ import annotations
 
 import logging
+import mimetypes
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
 log = logging.getLogger(__name__)
+
+# Windows reads MIME types from the registry, which can be silently overridden
+# by other installed apps (e.g. some return text/plain for .js). FileResponse
+# inherits from mimetypes.guess_type, so a stale registry would break ES module
+# loading in the browser. Force the canonical web types here.
+for ext, mime in [
+    (".js", "application/javascript"),
+    (".mjs", "application/javascript"),
+    (".css", "text/css"),
+    (".svg", "image/svg+xml"),
+    (".json", "application/json"),
+    (".wasm", "application/wasm"),
+    (".map", "application/json"),
+]:
+    mimetypes.add_type(mime, ext)
 
 
 def _resolve_static_dir() -> Path | None:
