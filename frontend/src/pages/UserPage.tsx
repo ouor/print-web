@@ -28,21 +28,22 @@ function persistStored(value: StoredJob | null): void {
   else localStorage.removeItem(STORAGE_KEY)
 }
 
-const TERMINAL = new Set<JobStatus>([
-  JobStatus.DONE,
-  JobStatus.FAILED,
-  JobStatus.REJECTED,
-])
+// Only DONE is terminal from the user's perspective. FAILED and REJECTED
+// stay in the polling loop so an admin retry (or a manual approval that
+// followed a delay) flows naturally back into 출력중 → 출력 완료 without
+// the user ever knowing the print failed or was rejected.
+const TERMINAL = new Set<JobStatus>([JobStatus.DONE])
 
 // Collapse the backend status machine into the three user-facing phases.
 // The admin-side detail (approval, rejection reason, printer failure) is
-// deliberately not exposed.
+// deliberately not exposed — FAILED and REJECTED both surface as 대기중
+// so the admin's existence stays invisible.
 type UserPhase = 'waiting' | 'progress' | 'done'
 
 function userPhase(s: JobStatus): UserPhase {
-  if (s === JobStatus.PENDING || s === JobStatus.APPROVED) return 'waiting'
   if (s === JobStatus.PRINTING) return 'progress'
-  return 'done'
+  if (s === JobStatus.DONE) return 'done'
+  return 'waiting'
 }
 
 const PHASE_TITLE: Record<UserPhase, string> = {
@@ -58,19 +59,11 @@ const PHASE_TONE: Record<UserPhase, string> = {
 }
 
 function userSubtitle(s: JobStatus): string {
-  switch (s) {
-    case JobStatus.PENDING:
-    case JobStatus.APPROVED:
-      return '순서를 기다리는 중입니다.'
-    case JobStatus.PRINTING:
-      return '출력 중입니다. 잠시만 기다려주세요.'
-    case JobStatus.DONE:
-      return '출력물을 받아가세요.'
-    case JobStatus.FAILED:
-      return '문제가 발생했어요. 다시 시도해주세요.'
-    case JobStatus.REJECTED:
-      return '이 요청은 처리되지 않았습니다.'
-  }
+  if (s === JobStatus.PRINTING) return '출력 중입니다. 잠시만 기다려주세요.'
+  if (s === JobStatus.DONE) return '출력물을 받아가세요.'
+  // PENDING, APPROVED, FAILED, REJECTED — all share the same neutral copy
+  // so the user can't tell the print failed or was rejected.
+  return '순서를 기다리는 중입니다.'
 }
 
 export function UserPage() {
