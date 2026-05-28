@@ -69,7 +69,7 @@ def print_image(
     printer_name: str | None = None,
     *,
     spool_doc_name: str | None = None,
-    spool_timeout_seconds: float = 180.0,
+    spool_timeout_seconds: float = 60.0,
 ) -> None:
     """Send one image to the printer as a single page and wait for the
     spooler to confirm completion.
