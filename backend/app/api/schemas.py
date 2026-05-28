@@ -28,6 +28,7 @@ class AdminJob(BaseModel):
     status: JobStatus
     status_message: str | None
     reject_reason: str | None
+    retry_count: int
     created_at: datetime
     updated_at: datetime
     decided_at: datetime | None

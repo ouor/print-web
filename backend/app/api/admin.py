@@ -22,6 +22,7 @@ from app.services.jobs import (
     approve_job,
     list_jobs_for_admin,
     reject_job,
+    retry_job,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -34,6 +35,7 @@ def _to_admin_job(job: Job) -> AdminJob:
         status=job.status,
         status_message=job.status_message,
         reject_reason=job.reject_reason,
+        retry_count=job.retry_count,
         created_at=job.created_at,
         updated_at=job.updated_at,
         decided_at=job.decided_at,
@@ -113,6 +115,24 @@ def reject(
 ) -> AdminJob:
     try:
         job = reject_job(session, job_id, payload.reason)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail="job not found") from e
+    except InvalidTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _to_admin_job(job)
+
+
+@router.post(
+    "/jobs/{job_id}/retry",
+    response_model=AdminJob,
+    dependencies=[Depends(require_admin)],
+)
+def retry(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> AdminJob:
+    try:
+        job = retry_job(session, job_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail="job not found") from e
     except InvalidTransitionError as e:

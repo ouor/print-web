@@ -98,3 +98,33 @@ def reject_job(session: Session, job_id: str, reason: str) -> Job:
     return _decide_pending(
         session, job_id, new_status=JobStatus.REJECTED, reject_reason=reason
     )
+
+
+def retry_job(session: Session, job_id: str) -> Job:
+    """Send a FAILED job back to APPROVED so the worker picks it up again.
+
+    Bumps retry_count and clears the previous failure message. Only FAILED
+    is allowed — DONE/REJECTED/PENDING/APPROVED/PRINTING all raise.
+    """
+    job = session.get(Job, job_id)
+    if job is None:
+        raise LookupError(job_id)
+    if job.status != JobStatus.FAILED:
+        raise InvalidTransitionError(
+            f"cannot retry job in status {job.status}; only FAILED is retryable"
+        )
+    if not job.image_path:
+        # Retention sweep nulled the file out — nothing to reprint.
+        raise InvalidTransitionError("image file no longer stored; ask the requester to resubmit")
+
+    now = utcnow()
+    job.status = JobStatus.APPROVED
+    job.status_message = None
+    job.retry_count += 1
+    job.decided_at = now
+    job.printed_at = None
+    job.updated_at = now
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
