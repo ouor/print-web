@@ -47,8 +47,8 @@ function userPhase(s: JobStatus): UserPhase {
 
 const PHASE_TITLE: Record<UserPhase, string> = {
   waiting: '대기중',
-  progress: '진행중',
-  done: '완료',
+  progress: '출력중',
+  done: '출력 완료',
 }
 
 const PHASE_TONE: Record<UserPhase, string> = {
@@ -63,7 +63,7 @@ function userSubtitle(s: JobStatus): string {
     case JobStatus.APPROVED:
       return '순서를 기다리는 중입니다.'
     case JobStatus.PRINTING:
-      return '인쇄 중입니다. 잠시만 기다려주세요.'
+      return '출력 중입니다. 잠시만 기다려주세요.'
     case JobStatus.DONE:
       return '출력물을 받아가세요.'
     case JobStatus.FAILED:

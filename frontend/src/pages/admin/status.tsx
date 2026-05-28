@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import type { AdminJob } from '../../api/generated/model'
 import { JobStatus } from '../../api/generated/model'
 
 export const STATUS_BADGE: Record<JobStatus, string> = {
@@ -14,10 +15,22 @@ export const STATUS_BADGE: Record<JobStatus, string> = {
 export const STATUS_LABEL: Record<JobStatus, string> = {
   PENDING: '대기',
   APPROVED: '승인',
-  PRINTING: '인쇄 중',
+  PRINTING: '출력 중',
   DONE: '완료',
   FAILED: '실패',
   REJECTED: '거절',
+}
+
+// Per-job label that distinguishes a retry attempt from the first one.
+// Approved-after-retry and printing-after-retry both surface as 재시도 so
+// the admin can tell at a glance whether a job's running for the first
+// time or has been re-queued.
+export function adminJobLabel(job: AdminJob): string {
+  if (job.retry_count > 0) {
+    if (job.status === JobStatus.APPROVED) return `재시도 대기 (${job.retry_count})`
+    if (job.status === JobStatus.PRINTING) return `재시도 중 (${job.retry_count})`
+  }
+  return STATUS_LABEL[job.status]
 }
 
 function formatRelative(iso: string): string {

@@ -737,6 +737,68 @@ export const useRejectApiAdminJobsJobIdRejectPost = <TError = HTTPValidationErro
     }
 
 /**
+ * @summary Retry
+ */
+export const retryApiAdminJobsJobIdRetryPost = (
+    jobId: string,
+ signal?: AbortSignal
+) => {
+
+
+      return apiMutator<AdminJob>(
+      {url: `/api/admin/jobs/${jobId}/retry`, method: 'POST', signal
+    },
+      );
+    }
+
+
+
+export const getRetryApiAdminJobsJobIdRetryPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>, TError,{jobId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>, TError,{jobId: string}, TContext> => {
+
+const mutationKey = ['retryApiAdminJobsJobIdRetryPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>, {jobId: string}> = (props) => {
+          const {jobId} = props ?? {};
+
+          return  retryApiAdminJobsJobIdRetryPost(jobId,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryApiAdminJobsJobIdRetryPostMutationResult = NonNullable<Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>>
+
+    export type RetryApiAdminJobsJobIdRetryPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Retry
+ */
+export const useRetryApiAdminJobsJobIdRetryPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>, TError,{jobId: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryApiAdminJobsJobIdRetryPost>>,
+        TError,
+        {jobId: string},
+        TContext
+      > => {
+      return useMutation(getRetryApiAdminJobsJobIdRetryPostMutationOptions(options), queryClient);
+    }
+
+/**
  * @summary Job Thumb
  */
 export const jobThumbApiAdminJobsJobIdThumbGet = (

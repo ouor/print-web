@@ -15,6 +15,7 @@ export interface AdminJob {
   status: JobStatus;
   status_message: string | null;
   reject_reason: string | null;
+  retry_count: number;
   created_at: string;
   updated_at: string;
   decided_at: string | null;
