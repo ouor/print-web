@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.printer.calibration import PrintGeometry
+from app.printer.spool import wait_for_completion
 
 if sys.platform == "win32":
     import win32print
@@ -63,10 +64,23 @@ def resolve_printer_name(configured: str | None) -> str:
     return win32print.GetDefaultPrinter()
 
 
-def print_image(image_path: str | Path, printer_name: str | None = None) -> None:
-    """Send one image to the printer as a single page.
+def print_image(
+    image_path: str | Path,
+    printer_name: str | None = None,
+    *,
+    spool_doc_name: str | None = None,
+    spool_timeout_seconds: float = 180.0,
+) -> None:
+    """Send one image to the printer as a single page and wait for the
+    spooler to confirm completion.
 
-    Raises PrinterError on failure.
+    spool_doc_name: the document title used both for StartDoc and for
+        matching the job in EnumJobs. Caller should pass a value that's
+        unique per print attempt (e.g. f"print-web:{job_id}") so the
+        spool tracker can lock onto exactly our job.
+
+    Raises PrinterError on failure (GDI error, spooler-reported error,
+    or timeout waiting for PRINTED).
     """
     if sys.platform != "win32":
         raise PrinterError("printing is only supported on Windows")
@@ -75,6 +89,8 @@ def print_image(image_path: str | Path, printer_name: str | None = None) -> None
     path = Path(image_path)
     if not path.exists():
         raise PrinterError(f"image not found: {path}")
+
+    doc_name = spool_doc_name or f"print-web: {path.name}"
 
     hdc = win32ui.CreateDC()
     try:
@@ -105,7 +121,7 @@ def print_image(image_path: str | Path, printer_name: str | None = None) -> None
             x = (content_w - draw_w) // 2
             y = (content_h - draw_h) // 2
 
-            hdc.StartDoc(f"print-web: {path.name}")
+            hdc.StartDoc(doc_name)
             try:
                 hdc.StartPage()
                 dib = ImageWin.Dib(im)
@@ -123,3 +139,11 @@ def print_image(image_path: str | Path, printer_name: str | None = None) -> None
             hdc.DeleteDC()
         except Exception:
             pass
+
+    # GDI returned cleanly — the job is now in the spooler queue. Wait for
+    # the spooler to actually print it (or fail) so DONE means paper-out.
+    result = wait_for_completion(
+        target, doc_name, timeout_seconds=spool_timeout_seconds
+    )
+    if not result.success:
+        raise PrinterError(result.message)

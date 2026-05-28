@@ -83,10 +83,21 @@ async def _run_once(loop: asyncio.AbstractEventLoop) -> bool:
     if job is None:
         return False
 
-    log.info("printing job %s (%s) on %r", job.id, job.requester_name, settings.printer_name or "<default>")
+    log.info(
+        "printing job %s (%s) on %r [retry=%d]",
+        job.id, job.requester_name, settings.printer_name or "<default>", job.retry_count,
+    )
+    # Per-attempt unique doc name so the spool tracker can match this exact
+    # submission in EnumJobs even if the same job was printed before.
+    doc_name = f"print-web:{job.id}:{job.retry_count}"
     try:
         await loop.run_in_executor(
-            None, print_image, job.image_path, settings.printer_name or None
+            None,
+            lambda: print_image(
+                job.image_path,
+                settings.printer_name or None,
+                spool_doc_name=doc_name,
+            ),
         )
         await loop.run_in_executor(None, _mark_done, job.id)
         log.info("printed job %s", job.id)
