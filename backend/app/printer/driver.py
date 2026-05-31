@@ -8,7 +8,6 @@ photo paper edge-to-edge.
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 from app.printer.calibration import PrintGeometry
@@ -32,24 +31,20 @@ _HORZRES = 8
 _VERTRES = 10
 
 
-@dataclass(frozen=True)
-class _ActiveCalibration:
-    printer_name: str
-    geometry: PrintGeometry
-
-
-_active: _ActiveCalibration | None = None
+# printer_name → calibrated geometry. Populated by app.main at startup
+# for each configured printer; print_image() reads from here so the worker
+# doesn't re-probe GDI on every job. Multiple entries when more than one
+# printer is configured.
+_active: dict[str, PrintGeometry] = {}
 
 
 def set_active_geometry(printer_name: str, geometry: PrintGeometry | None) -> None:
     """Cache the calibrated geometry for one printer. Pass geometry=None to
-    clear the cache (e.g. when the configured printer changes)."""
-    global _active
-    _active = (
-        _ActiveCalibration(printer_name=printer_name, geometry=geometry)
-        if geometry is not None
-        else None
-    )
+    clear the entry (e.g. on shutdown DEVMODE restore)."""
+    if geometry is None:
+        _active.pop(printer_name, None)
+    else:
+        _active[printer_name] = geometry
 
 
 class PrinterError(RuntimeError):
@@ -101,10 +96,12 @@ def print_image(
     try:
         # Prefer the geometry the lifespan probed at startup so we don't
         # re-query GDI on every job. Falls back to a per-call probe if
-        # calibration was skipped or aimed at a different printer.
-        if _active is not None and _active.printer_name == target:
-            content_w = _active.geometry.content_w_px
-            content_h = _active.geometry.content_h_px
+        # calibration was skipped (or this printer wasn't in the configured
+        # set, e.g. fell back to Windows default).
+        cached = _active.get(target)
+        if cached is not None:
+            content_w = cached.content_w_px
+            content_h = cached.content_h_px
         else:
             content_w = hdc.GetDeviceCaps(_HORZRES)
             content_h = hdc.GetDeviceCaps(_VERTRES)
