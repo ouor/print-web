@@ -38,6 +38,11 @@ class Job(SQLModel, table=True):
     # Number of admin-initiated retries. 0 on first attempt; bumped each
     # time a FAILED job is sent back to APPROVED via the retry endpoint.
     retry_count: int = Field(default=0)
+    # The printer that picked this job up. Set when the worker atomically
+    # claims an APPROVED job; null while pending. Useful for spotting
+    # patterns like "all FAILED jobs came from printer X" without piping
+    # logs.
+    printer_name: str | None = None
     created_at: datetime = Field(default_factory=utcnow, index=True)
     updated_at: datetime = Field(default_factory=utcnow, index=True)
     decided_at: datetime | None = None

@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     admin_password_hash: str = ""
     secret_key: str = ""
 
+    # Comma-separated list of printer names. Single printer is the common
+    # case ("Samsung CLX-8380 Series PS"); for multiple printers, list them
+    # all ("Samsung CLX-8380 Series PS,HP Business Inkjet 3000 PS"). The
+    # worker spawns one task per printer and routes APPROVED jobs to
+    # whichever printer is idle.
     printer_name: str = ""
 
     # Photo paper layout in mm — used by the startup calibration to push an
@@ -37,6 +42,13 @@ class Settings(BaseSettings):
     @property
     def upload_max_bytes(self) -> int:
         return self.upload_max_mb * 1024 * 1024
+
+    @property
+    def printer_names(self) -> list[str]:
+        """Parsed PRINTER_NAME as a list. Empty list when the env var is unset,
+        in which case the main module falls back to an interactive prompt
+        (or the Windows default printer if no TTY)."""
+        return [n.strip() for n in self.printer_name.split(",") if n.strip()]
 
 
 settings = Settings()
