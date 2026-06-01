@@ -17,6 +17,7 @@ import logging
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.db.engine import engine
 from app.db.models import Job, JobStatus, utcnow
 from app.printer.driver import PrinterError, print_image
@@ -118,6 +119,7 @@ async def _run_once(
                 job.image_path,
                 printer_name,
                 spool_doc_name=doc_name,
+                spool_timeout_seconds=settings.print_spool_timeout_seconds,
             ),
         )
         await loop.run_in_executor(None, _mark_done, job.id)

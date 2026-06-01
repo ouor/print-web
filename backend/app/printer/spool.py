@@ -99,7 +99,7 @@ def wait_for_completion(
     printer_name: str,
     doc_name: str,
     *,
-    timeout_seconds: float = 60.0,
+    timeout_seconds: float = 120.0,
     poll_interval: float = 1.0,
     grace_seconds: float = 5.0,
 ) -> SpoolResult:

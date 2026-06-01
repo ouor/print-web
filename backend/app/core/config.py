@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     print_paper_long_mm: float = 152.4
     print_paper_short_mm: float = 101.6
 
+    # How long the worker waits for the Windows spooler to report a job as
+    # PRINTED before giving up and marking it FAILED. Real-world prints on
+    # warm-up / older USB printers regularly exceed 60s, so the default is
+    # generous; tune per site if a printer is reliably faster or slower.
+    print_spool_timeout_seconds: float = 120.0
+
     retention_days: int = 7
     upload_max_mb: int = 15
 
