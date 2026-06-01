@@ -17,7 +17,13 @@ function loadStored(): StoredJob | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as StoredJob
+    const parsed = JSON.parse(raw) as Partial<StoredJob>
+    if (typeof parsed.id !== 'string' || typeof parsed.name !== 'string') {
+      // Malformed entry (older build, manual edit, partial write) — treat
+      // as no stored job rather than mounting Tracker with bad values.
+      return null
+    }
+    return { id: parsed.id, name: parsed.name }
   } catch {
     return null
   }
@@ -461,7 +467,10 @@ function Tracker({
           )}
         </div>
 
-        {status && TERMINAL.has(status) && (
+        {/* Reset is always available so the user can escape a stuck state
+            (network error, server lost the jobId, lingering REJECTED, ...).
+            Style/label change on DONE but the button never disappears. */}
+        {status && TERMINAL.has(status) ? (
           <button
             type="button"
             onClick={onReset}
@@ -469,14 +478,13 @@ function Tracker({
           >
             새로 인쇄하기
           </button>
-        )}
-        {status && !TERMINAL.has(status) && (
+        ) : (
           <button
             type="button"
             onClick={onReset}
             className="mt-5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            요청 취소하고 새로 시작
+            처음으로 돌아가기
           </button>
         )}
       </div>
