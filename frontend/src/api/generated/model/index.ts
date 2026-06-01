@@ -9,6 +9,7 @@ export * from './adminJob';
 export * from './adminJobList';
 export * from './adminLoginRequest';
 export * from './adminMe';
+export * from './approveRequest';
 export * from './bodySubmitJobApiJobsPost';
 export * from './createJobResponse';
 export * from './healthApiHealthGet200';

@@ -11,9 +11,58 @@ import { JobStatus } from '../../api/generated/model'
 import { RejectModal } from './RejectModal'
 import { adminJobLabel, RelativeTime, STATUS_BADGE } from './status'
 
+// Mirror MAX_COPIES from backend/app/api/schemas.py. Hard-coded rather
+// than read from OpenAPI so the stepper can disable the + button without
+// waiting for a 422 from the server.
+const MAX_COPIES = 10
+
+function CopiesStepper({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number
+  onChange: (n: number) => void
+  disabled: boolean
+}) {
+  const dec = () => onChange(Math.max(1, value - 1))
+  const inc = () => onChange(Math.min(MAX_COPIES, value + 1))
+  return (
+    <div className="inline-flex items-center overflow-hidden rounded-md border border-gray-300 bg-white">
+      <button
+        type="button"
+        aria-label="매수 감소"
+        disabled={disabled || value <= 1}
+        onClick={dec}
+        className="h-8 w-8 text-lg leading-none text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        −
+      </button>
+      <span
+        aria-live="polite"
+        className="w-8 text-center text-sm font-medium tabular-nums text-gray-900"
+      >
+        {value}
+      </span>
+      <button
+        type="button"
+        aria-label="매수 증가"
+        disabled={disabled || value >= MAX_COPIES}
+        onClick={inc}
+        className="h-8 w-8 text-lg leading-none text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 export function PendingCard({ job }: { job: AdminJob }) {
   const queryClient = useQueryClient()
   const [rejecting, setRejecting] = useState(false)
+  // Each pending card owns its own copies state so the admin can prep a
+  // batch on one job without affecting siblings on the dashboard.
+  const [copies, setCopies] = useState(1)
 
   const approve = useApproveApiAdminJobsJobIdApprovePost({
     mutation: {
@@ -45,14 +94,22 @@ export function PendingCard({ job }: { job: AdminJob }) {
           <p className="font-medium text-gray-900">{job.requester_name}</p>
           <RelativeTime ts={job.created_at} />
         </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="text-sm text-gray-700">인쇄 매수</span>
+          <CopiesStepper
+            value={copies}
+            onChange={setCopies}
+            disabled={approve.isPending}
+          />
+        </div>
         <div className="mt-3 flex gap-2">
           <button
             type="button"
             disabled={approve.isPending}
-            onClick={() => approve.mutate({ jobId: job.id })}
+            onClick={() => approve.mutate({ jobId: job.id, data: { copies } })}
             className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:bg-emerald-300"
           >
-            승인
+            {copies > 1 ? `승인 (${copies}매)` : '승인'}
           </button>
           <button
             type="button"
@@ -92,7 +149,14 @@ export function CompactCard({ job }: { job: AdminJob }) {
         <div className="h-12 w-12 rounded-md bg-gray-100" />
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">{job.requester_name}</p>
+        <p className="truncate text-sm font-medium text-gray-900">
+          {job.requester_name}
+          {job.copies > 1 && (
+            <span className="ml-1 text-xs font-normal text-gray-500">
+              × {job.copies}매
+            </span>
+          )}
+        </p>
         <RelativeTime ts={job.updated_at} />
       </div>
       <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[job.status]}`}>
@@ -122,7 +186,12 @@ export function HistoryRow({ job }: { job: AdminJob }) {
         {adminJobLabel(job)}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-gray-900">{job.requester_name}</p>
+        <p className="truncate text-sm text-gray-900">
+          {job.requester_name}
+          {job.copies > 1 && (
+            <span className="ml-1 text-xs text-gray-500">× {job.copies}매</span>
+          )}
+        </p>
         {job.status === JobStatus.REJECTED && job.reject_reason && (
           <p className="truncate text-xs text-gray-500">{job.reject_reason}</p>
         )}

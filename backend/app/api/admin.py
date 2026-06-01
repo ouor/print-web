@@ -10,6 +10,7 @@ from app.api.schemas import (
     AdminJobList,
     AdminLoginRequest,
     AdminMe,
+    ApproveRequest,
     RejectRequest,
 )
 from app.core.config import settings
@@ -36,6 +37,7 @@ def _to_admin_job(job: Job) -> AdminJob:
         status_message=job.status_message,
         reject_reason=job.reject_reason,
         retry_count=job.retry_count,
+        copies=job.copies,
         created_at=job.created_at,
         updated_at=job.updated_at,
         decided_at=job.decided_at,
@@ -92,10 +94,13 @@ def list_jobs(
 )
 def approve(
     job_id: str,
+    # Optional body: legacy clients POST with no body and get 1 copy.
+    payload: ApproveRequest | None = None,
     session: Session = Depends(get_session),
 ) -> AdminJob:
+    copies = payload.copies if payload is not None else 1
     try:
-        job = approve_job(session, job_id)
+        job = approve_job(session, job_id, copies=copies)
     except LookupError as e:
         raise HTTPException(status_code=404, detail="job not found") from e
     except InvalidTransitionError as e:

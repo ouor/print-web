@@ -105,31 +105,64 @@ async def _run_once(
     if job is None:
         return False
 
+    # Defensive clamp — DB column has a default of 1 but a hand-edited row
+    # could still be 0/negative.
+    total = max(1, int(job.copies or 1))
     log.info(
-        "printing job %s (%s) on %r [retry=%d]",
-        job.id, job.requester_name, printer_name, job.retry_count,
+        "printing job %s (%s) on %r [retry=%d, copies=%d]",
+        job.id, job.requester_name, printer_name, job.retry_count, total,
     )
-    # Per-attempt unique doc name so the spool tracker can match this exact
-    # submission in EnumJobs even if the same job was printed before.
-    doc_name = f"print-web:{job.id}:{job.retry_count}"
-    try:
-        await loop.run_in_executor(
-            None,
-            lambda: print_image(
-                job.image_path,
-                printer_name,
-                spool_doc_name=doc_name,
-                spool_timeout_seconds=settings.print_spool_timeout_seconds,
-            ),
-        )
-        await loop.run_in_executor(None, _mark_done, job.id)
-        log.info("printed job %s on %s", job.id, printer_name)
-    except PrinterError as e:
-        log.exception("print failed for %s on %s", job.id, printer_name)
-        await loop.run_in_executor(None, _mark_failed, job.id, f"{printer_name}: {e}")
-    except Exception as e:  # pragma: no cover - safety net
-        log.exception("unexpected print error for %s on %s", job.id, printer_name)
-        await loop.run_in_executor(None, _mark_failed, job.id, f"{printer_name}: unexpected: {e}")
+    # Per-attempt + per-copy unique doc name so the spool tracker can lock
+    # onto exactly this submission in EnumJobs even if the same job was
+    # printed before or queues another copy right after.
+    for i in range(total):
+        copy_idx = i + 1
+        doc_name = f"print-web:{job.id}:{job.retry_count}:{copy_idx}/{total}"
+        try:
+            # Bind doc_name as a default arg to avoid the classic
+            # late-binding closure bug when looping.
+            await loop.run_in_executor(
+                None,
+                lambda d=doc_name: print_image(
+                    job.image_path,
+                    printer_name,
+                    spool_doc_name=d,
+                    spool_timeout_seconds=settings.print_spool_timeout_seconds,
+                ),
+            )
+            log.info(
+                "printed copy %d/%d of job %s on %s",
+                copy_idx, total, job.id, printer_name,
+            )
+        except PrinterError as e:
+            log.exception(
+                "print failed for %s on %s (copy %d/%d)",
+                job.id, printer_name, copy_idx, total,
+            )
+            await loop.run_in_executor(
+                None,
+                _mark_failed,
+                job.id,
+                f"{printer_name} {copy_idx}/{total}장: {e}",
+            )
+            # Stop the rest of the run: continuing after a confirmed
+            # failure would print the wrong total and confuse the admin.
+            return True
+        except Exception as e:  # pragma: no cover - safety net
+            log.exception(
+                "unexpected print error for %s on %s (copy %d/%d)",
+                job.id, printer_name, copy_idx, total,
+            )
+            await loop.run_in_executor(
+                None,
+                _mark_failed,
+                job.id,
+                f"{printer_name} {copy_idx}/{total}장: unexpected: {e}",
+            )
+            return True
+
+    await loop.run_in_executor(None, _mark_done, job.id)
+    log.info("printed job %s on %s (%d copies)", job.id, printer_name, total)
     return True
 
 

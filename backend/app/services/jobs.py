@@ -68,6 +68,7 @@ def _decide_pending(
     *,
     new_status: JobStatus,
     reject_reason: str | None = None,
+    copies: int | None = None,
 ) -> Job:
     """Move a PENDING job to APPROVED or REJECTED. Raises if no such job
     or if the job has already left PENDING."""
@@ -84,14 +85,20 @@ def _decide_pending(
     job.updated_at = now
     if reject_reason is not None:
         job.reject_reason = reject_reason.strip() or None
+    if copies is not None:
+        # API layer already bounds this; clamp defensively so a direct
+        # service call can't queue a runaway print job.
+        job.copies = max(1, int(copies))
     session.add(job)
     session.commit()
     session.refresh(job)
     return job
 
 
-def approve_job(session: Session, job_id: str) -> Job:
-    return _decide_pending(session, job_id, new_status=JobStatus.APPROVED)
+def approve_job(session: Session, job_id: str, *, copies: int = 1) -> Job:
+    return _decide_pending(
+        session, job_id, new_status=JobStatus.APPROVED, copies=copies
+    )
 
 
 def reject_job(session: Session, job_id: str, reason: str) -> Job:

@@ -28,6 +28,7 @@ import type {
   AdminJobList,
   AdminLoginRequest,
   AdminMe,
+  ApproveRequest,
   BodySubmitJobApiJobsPost,
   CreateJobResponse,
   HTTPValidationError,
@@ -614,12 +615,15 @@ export function useListJobsApiAdminJobsGet<TData = Awaited<ReturnType<typeof lis
  */
 export const approveApiAdminJobsJobIdApprovePost = (
     jobId: string,
+    approveRequestNull?: ApproveRequest | null,
  signal?: AbortSignal
 ) => {
 
 
       return apiMutator<AdminJob>(
-      {url: `/api/admin/jobs/${jobId}/approve`, method: 'POST', signal
+      {url: `/api/admin/jobs/${jobId}/approve`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: approveRequestNull, signal
     },
       );
     }
@@ -627,8 +631,8 @@ export const approveApiAdminJobsJobIdApprovePost = (
 
 
 export const getApproveApiAdminJobsJobIdApprovePostMutationOptions = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string}, TContext>, }
-): UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string;data?: ApproveRequest | null}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string;data?: ApproveRequest | null}, TContext> => {
 
 const mutationKey = ['approveApiAdminJobsJobIdApprovePost'];
 const {mutation: mutationOptions} = options ?
@@ -640,10 +644,10 @@ const {mutation: mutationOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, {jobId: string}> = (props) => {
-          const {jobId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, {jobId: string;data?: ApproveRequest | null}> = (props) => {
+          const {jobId,data} = props ?? {};
 
-          return  approveApiAdminJobsJobIdApprovePost(jobId,)
+          return  approveApiAdminJobsJobIdApprovePost(jobId,data,)
         }
 
 
@@ -654,18 +658,18 @@ const {mutation: mutationOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ApproveApiAdminJobsJobIdApprovePostMutationResult = NonNullable<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>>
-
+    export type ApproveApiAdminJobsJobIdApprovePostMutationBody = ApproveRequest | null | undefined
     export type ApproveApiAdminJobsJobIdApprovePostMutationError = HTTPValidationError
 
     /**
  * @summary Approve
  */
 export const useApproveApiAdminJobsJobIdApprovePost = <TError = HTTPValidationError,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string}, TContext>, }
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>, TError,{jobId: string;data?: ApproveRequest | null}, TContext>, }
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof approveApiAdminJobsJobIdApprovePost>>,
         TError,
-        {jobId: string},
+        {jobId: string;data?: ApproveRequest | null},
         TContext
       > => {
       return useMutation(getApproveApiAdminJobsJobIdApprovePostMutationOptions(options), queryClient);

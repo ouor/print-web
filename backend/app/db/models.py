@@ -38,6 +38,11 @@ class Job(SQLModel, table=True):
     # Number of admin-initiated retries. 0 on first attempt; bumped each
     # time a FAILED job is sent back to APPROVED via the retry endpoint.
     retry_count: int = Field(default=0)
+    # Number of copies the admin requested at approval time. The worker
+    # prints the same image this many times back-to-back before releasing
+    # the printer, so the requester's whole batch always comes out before
+    # the next job's pages. Bounded 1..MAX_COPIES at the API layer.
+    copies: int = Field(default=1)
     # The printer that picked this job up. Set when the worker atomically
     # claims an APPROVED job; null while pending. Useful for spotting
     # patterns like "all FAILED jobs came from printer X" without piping

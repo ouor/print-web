@@ -16,6 +16,7 @@ export interface AdminJob {
   status_message: string | null;
   reject_reason: string | null;
   retry_count: number;
+  copies: number;
   created_at: string;
   updated_at: string;
   decided_at: string | null;
